@@ -258,7 +258,7 @@ func (c *IPAMContext) nodeInit() error {
 		}
 		log.Infof("Recovered AddNetwork for Pod %s, Namespace %s, Container %s",
 			ip.Name, ip.Namespace, ip.Container)
-		_, _, err = c.dataStore.AssignPodIPv4Address(ip)
+		_, _, _, err = c.dataStore.AssignPodIPv4Address(ip)
 		if err != nil {
 			ipamdErrInc("nodeInitAssignPodIPv4AddressFailed", err)
 			log.Warnf("During ipamd init, failed to use pod ip %s returned from Kubelet %v", ip.IP, err)
@@ -504,7 +504,7 @@ func (c *IPAMContext) increaseIPPool() {
 func (c *IPAMContext) setupENI(eni string, eniMetadata awsutils.ENIMetadata) error {
 	// Have discovered the attached ENI from metadata service
 	// add eni's IP to IP pool
-	err := c.dataStore.AddENI(eni, int(eniMetadata.DeviceNumber), (eni == c.awsClient.GetPrimaryENI()))
+	err := c.dataStore.AddENI(eni, int(eniMetadata.DeviceNumber), (eni == c.awsClient.GetPrimaryENI()), eniMetadata.MAC)
 	if err != nil && err.Error() != datastore.DuplicatedENIError {
 		return errors.Wrapf(err, "failed to add eni %s to data store", eni)
 	}

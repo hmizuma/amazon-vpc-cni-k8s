@@ -88,6 +88,7 @@ type AddNetworkReply struct {
 	IPv4Addr     string `protobuf:"bytes,2,opt,name=IPv4Addr" json:"IPv4Addr,omitempty"`
 	IPv4Subnet   string `protobuf:"bytes,3,opt,name=IPv4Subnet" json:"IPv4Subnet,omitempty"`
 	DeviceNumber int32  `protobuf:"varint,4,opt,name=DeviceNumber" json:"DeviceNumber,omitempty"`
+	MAC          string `protobuf:"bytes,5,opt,name=MAC" json:"MAC,omitempty"`
 }
 
 func (m *AddNetworkReply) Reset()                    { *m = AddNetworkReply{} }
@@ -121,6 +122,13 @@ func (m *AddNetworkReply) GetDeviceNumber() int32 {
 		return m.DeviceNumber
 	}
 	return 0
+}
+
+func (m *AddNetworkReply) GetMACAddress() string {
+	if m != nil {
+		return m.MAC
+	}
+	return ""
 }
 
 type DelNetworkRequest struct {
