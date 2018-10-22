@@ -38,7 +38,7 @@ const (
 	// TODO need to test all distros use this number
 	mainRouteTable = 254
 
-	ethernetMTU = 1500
+	ethernetMTU = 9001
 )
 
 // NetworkAPIs defines network API calls

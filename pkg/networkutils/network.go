@@ -90,6 +90,7 @@ type linuxNetwork struct {
 	newIptables func() (iptablesIface, error)
 	mainENIMark uint32
 	openFile    func(name string, flag int, perm os.FileMode) (stringWriteCloser, error)
+	mtu         int
 }
 
 type iptablesIface interface {
@@ -178,13 +179,15 @@ func (n *linuxNetwork) SetupHostNetwork(vpcCIDR *net.IPNet, primaryMAC string, p
 		}
 	}
 
+	primaryLink, err := LinkByMac(primaryMAC, n.netLink)
+	if err != nil {
+		return errors.Wrapf(err, "host network setup: failed to lookup primary interface")
+	}
+
+	// Save MTU of primary interface here to replicate to secondary ENIs
+	n.mtu = primaryLink.Attrs().MTU
+
 	if n.nodePortSupportEnabled {
-
-		primaryIntf, err := findPrimaryInterfaceName(primaryMAC)
-
-		if err != nil {
-			return errors.Wrapf(err, "failed to SetupHostNetwork")
-		}
 		// If node port support is enabled, configure the kernel's reverse path filter check on eth0 for "loose"
 		// filtering.  This is required because
 		// - NodePorts are exposed on eth0
@@ -194,7 +197,7 @@ func (n *linuxNetwork) SetupHostNetwork(vpcCIDR *net.IPNet, primaryMAC string, p
 		// - Thus, it finds the source-based route that leaves via the secondary ENI.
 		// - In "strict" mode, the RPF check fails because the return path uses a different interface to the incoming
 		//   packet.  In "loose" mode, the check passes because some route was found.
-		primaryIntfRPFilter := "/proc/sys/net/ipv4/conf/" + primaryIntf + "/rp_filter"
+		primaryIntfRPFilter := "/proc/sys/net/ipv4/conf/" + primaryLink.Attrs().Name + "/rp_filter"
 		const rpFilterLoose = "2"
 
 		log.Debugf("Setting RPF for primary interface: %s", primaryIntfRPFilter)
@@ -391,10 +394,10 @@ func LinkByMac(mac string, netLink netlinkwrapper.NetLink) (netlink.Link, error)
 
 // SetupENINetwork adds default route to route table (eni-<eni_table>)
 func (n *linuxNetwork) SetupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR string) error {
-	return setupENINetwork(eniIP, eniMAC, eniTable, eniSubnetCIDR, n.netLink)
+	return setupENINetwork(eniIP, eniMAC, eniTable, eniSubnetCIDR, n.netLink, n.mtu)
 }
 
-func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR string, netLink netlinkwrapper.NetLink) error {
+func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR string, netLink netlinkwrapper.NetLink, eniMTU int) error {
 
 	if eniTable == 0 {
 		log.Debugf("Skipping set up eni network for primary interface")
@@ -406,6 +409,10 @@ func setupENINetwork(eniIP string, eniMAC string, eniTable int, eniSubnetCIDR st
 	link, err := LinkByMac(eniMAC, netLink)
 	if err != nil {
 		return errors.Wrapf(err, "eni network setup: failed to find the link which uses mac address %s", eniMAC)
+	}
+
+	if err = netlink.LinkSetMTU(link, eniMTU); err != nil {
+		return errors.Wrapf(err, "eni network setup: failed to set MTU for %s", eniIP)
 	}
 
 	if err = netLink.LinkSetUp(link); err != nil {
